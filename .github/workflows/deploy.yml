@@ -80,6 +80,9 @@ jobs:
           container-name: ecs-devops-backend
           image: '${{ steps.docker-img-config.outputs.IMAGE_NAME }}:${{ steps.docker-img-config.outputs.IMAGE_TAG }}'
   
+      - name: Print task definition
+        run: cat ${{ steps.fill-task-def-image.outputs.task-definition }}
+
       # - name: Deploy Amazon ECS task definition
       #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       #   with:
