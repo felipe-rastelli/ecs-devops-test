@@ -1,0 +1,89 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+env:
+  # ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+  # ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+
+concurrency:
+  cancel-in-progress: true
+  group: cd-${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout to repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+      - name: Get project metadata
+        id: meta
+        run: |
+          version=$(cat package.json | jq -r ".version")
+          tag="v$version"
+          echo "Setting metadata: version=$version, tag=$tag"
+          echo "VERSION=$version" >> $GITHUB_OUTPUT
+          echo "VERSION_TAG=$tag" >> $GITHUB_OUTPUT
+
+      - name: Create docker image config
+        id: docker-img-config
+        run: |
+          echo "IMAGE_NAME=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=testsv-${{ steps.meta.outputs.VERSION_TAG }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push docker image to ECR
+        uses: docker/build-push-action@v5
+        with:
+          file: Dockerfile
+          target: deploy
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: '${{ steps.docker-img-config.outputs.IMAGE_NAME }}:${{ steps.docker-img-config.outputs.IMAGE_TAG }}'
+
+      - name: Fill in the role in the Amazon ECS task definition
+        id: fill-task-def-role
+        env:
+          TASK_DEFINITION: .aws/ecs/task-definition.json
+        run: |
+          executionRoleArn='arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ env.TASK_EXECUTION_ROLE }}'
+          taskDefinition=$(jq --arg roleArn "$executionRoleArn" '.executionRoleArn = $roleArn' $TASK_DEFINITION)
+          tempTaskDefinitionFilename="${{ env.RUNNER_TEMP }}/task-definition-$((RANDOM)).json"
+          echo $taskDefinition > $tempTaskDefinitionFilename
+          echo "ECS_TASK_DEFINITION=$tempTaskDefinitionFilename" >> $GITHUB_OUTPUT
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: fill-task-def-image
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ steps.fill-task-def-role.outputs.ECS_TASK_DEFINITION }}
+          container-name: ecs-devops-backend
+          image: '${{ steps.docker-img-config.outputs.IMAGE_NAME }}:${{ steps.docker-img-config.outputs.IMAGE_TAG }}'
+  
+      # - name: Deploy Amazon ECS task definition
+      #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      #   with:
+      #     task-definition: ${{ steps.fill-task-def-image.outputs.task-definition }}
+      #     service: ${{ env.ECS_SERVICE }}
+      #     cluster: ${{ env.ECS_CLUSTER }}
+      #     wait-for-service-stability: true
