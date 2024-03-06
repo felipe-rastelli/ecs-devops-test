@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
 
 env:
-  # AWS_ECS_CLUSTER: ${{ secrets.AWS_ECS_CLUSTER }}
-  # AWS_ECS_SERVICE: ${{ secrets.AWS_ECS_SERVICE }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
 
 concurrency:
   cancel-in-progress: true
@@ -68,7 +68,7 @@ jobs:
         run: |
           executionRoleArn='arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.AWS_ECS_TASK_EXECUTION_ROLE }}'
           taskDefinition=$(jq --arg roleArn "$executionRoleArn" '.executionRoleArn = $roleArn' $TASK_DEFINITION)
-          tempTaskDefinitionFilename="${{ env.RUNNER_TEMP }}/task-definition-$((RANDOM)).json"
+          tempTaskDefinitionFilename="$RUNNER_TEMP/task-definition-$((RANDOM)).json"
           echo $taskDefinition > $tempTaskDefinitionFilename
           echo "ECS_TASK_DEFINITION=$tempTaskDefinitionFilename" >> $GITHUB_OUTPUT
 
