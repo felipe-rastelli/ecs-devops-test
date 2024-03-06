@@ -58,7 +58,7 @@ jobs:
           target: deploy
           context: .
           push: true
-          platforms: linux/amd64
+          platforms: linux/arm64
           tags: '${{ steps.docker-img-config.outputs.IMAGE_NAME }}:${{ steps.docker-img-config.outputs.IMAGE_TAG }}'
 
       - name: Fill in the role in the Amazon ECS task definition
