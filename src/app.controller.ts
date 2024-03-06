@@ -28,16 +28,14 @@ export class AppController {
       ),
     );
 
-    return response.data
-      .map((repo) => ({
-        name: repo.name,
-        full_name: repo.full_name,
-        description: repo.description,
-        created_at: repo.created_at,
-        updated_at: repo.updated_at,
-        language: repo.language,
-        visibility: repo.visibility,
-      }))
-      .slice(0, 3);
+    return response.data.slice(0, 3).map((repo) => ({
+      name: repo.name,
+      full_name: repo.full_name,
+      description: repo.description,
+      created_at: repo.created_at,
+      updated_at: repo.updated_at,
+      language: repo.language,
+      visibility: repo.visibility,
+    }));
   }
 }
